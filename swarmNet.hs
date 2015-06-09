@@ -1,5 +1,8 @@
 import System.Random
-
+import Data.Graph.Inductive.Graph
+import Data.Graph.Inductive.PatriciaTree
+import Data.Graph.Inductive.Monad
+import Data.Graph.Inductive.Monad.IOArray
 randomList :: (Random a) => Int -> [a]
 randomList seed = randoms (mkStdGen seed)
 
@@ -23,7 +26,19 @@ walkers (u1:u2:u3:xs) = (rho, theta) :  walkers xs
 
 getWalkers :: Int -> [Walker]
 getWalkers sampleSize = take sampleSize $ walkers sample
+-- | empty (unlabeled) edge list
 
+getNodes :: Int -> [LNode Walker]
+getNodes n = zip  [1..n] (getWalkers n)
+
+noEdges :: [UEdge]
+noEdges = []
+b    = mkGraph (getNodes 100) noEdges
+
+
+main = do
+        putStr $ show $ getWalkers 100
+        putStr $ show b
 -- t = 2*pi*random()
 -- u = random()+random()
 -- r = if u>1 then 2-u else u
