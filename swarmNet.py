@@ -140,5 +140,5 @@ class Swarm(list):
         plt.show()
 
 S = Swarm()
-S.createNew(100)
+S.createNew(10000)
 S.recordWalkers()
