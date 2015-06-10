@@ -2,20 +2,17 @@ from random import random, uniform
 from math import pi, cos, sin, sqrt
 import networkx as nx
 from collections  import Counter
-
-from operator import attrgetter
-# -- t = 2*pi*random()
-# -- u = random()+random()
-# -- r = if u>1 then 2-u else u
-# -- [r*cos(t), r*sin(t)]
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy import spatial as sp
+from timer import Timer
+from sklearn.neighbors import BallTree as BT
+import numpy as np
 WALKERS = 100
 
 class Walker:
     number=0
-    def __init__(self,*args,**kwargs):
+    def __init__(self, *args, **kwargs):
         self.num = Walker.number
         Walker.number +=1
         u = random()+random()
@@ -63,17 +60,36 @@ class KDTree(sp.kdtree.KDTree):
 
     def getEdges(self, radius):
         results = []
-        for i,neighbors in enumerate(self.query_ball_tree(self,radius)):
-            if len(neighbors) > 0:
-                for n in neighbors:
-                    results.append((self.walkers[i],self.walkers[n]))
+        with Timer() as t:
+            for i,neighbors in enumerate(self.query_ball_tree(self,radius)):
+                if len(neighbors) > 0:
+                    for n in neighbors:
+                        results.append((self.walkers[i],self.walkers[n]))
         return results
 
+class BallTree():
+    def __init__(self,walkers):
+        self.walkers = walkers
+        self.tree = BT(walkers.getWalkersLocation())
+
+    def getEdges(self, radius):
+        results = []
+        with Timer() as t:
+            for i,neighbors in enumerate(self.tree.query_radius(self.walkers.getWalkersLocation(),radius)):
+                if len(neighbors) > 0:
+                    for n in neighbors:
+                        results.append((self.walkers[i],self.walkers[n]))
+        return results
+
+def NearBy():
+    def __init__(self,walkers):
+        self.walkers = walkers
+        self.dim = 2
 
 class Swarm(list):
     record = False
     def  __init__(self, *args, **kwargs):
-        self.kdTree = None
+        self.tree = None
         self.dt = 1
         self.G = nx.Graph()
 
@@ -98,11 +114,11 @@ class Swarm(list):
 
     def buildTree(self):
         ''' Kdtree to search for neighbors '''
-        self.kdTree = KDTree(self)
+        self.tree = BallTree(self)
 
     def updateGraph(self):
         self.buildTree()
-        self.G.add_edges_from(self.kdTree.getEdges(self.unitConnectionRadius))
+        self.G.add_edges_from(self.tree.getEdges(self.unitConnectionRadius))
 
     def getWalkersLocation(self):
         return [walker.location() for walker in self]
@@ -126,11 +142,11 @@ class Swarm(list):
                              xlim=(-1, 1), ylim=(-1, 1))
         self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=2)
 
-    def recordWalkers(self, frames = 60, interval = 100):
+    def recordWalkers(self, save=False, frames = 1, interval = 100):
         self.initRecord()
-        ani = animation.FuncAnimation(self.fig, self.timeStep, frames=60,
+        ani = animation.FuncAnimation(self.fig, self.timeStep, frames,
                                       interval=100)
-        ani.save('walkers-%5d.mp4'%(len(self)), fps=30, extra_args=['-vcodec', 'libx264'])
+        if save: ani.save('walkers-%5d.mp4'%(len(self)), fps=30, extra_args=['-vcodec', 'libx264'])
         plt.show()
 
     def plotGraphConnections(self):
@@ -140,5 +156,5 @@ class Swarm(list):
         plt.show()
 
 S = Swarm()
-S.createNew(10000)
+S.createNew(100000)
 S.recordWalkers()
