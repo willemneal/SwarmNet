@@ -1,5 +1,5 @@
 from random import random, uniform
-from math import pi, cos, sin, sqrt
+from math import pi, cos, sin, sqrt, isnan
 import networkx as nx
 from collections  import Counter
 import matplotlib.pyplot as plt
@@ -22,23 +22,56 @@ class Walker:
         self.y =  self.r*sin(self.t)
         self.Vin = 1./100.
         self.Vint= uniform(0,2*pi)
+        self.a = 1
 
-    def next(self):
+    def connectionForce(self, graph):
+        val = 0
+        for node in nx.all_neighbors(graph, self):
+            val += self.calculateForce(node)
+        res = val / self.getNorm(graph)
+        print res
+        if isnan(res[0]) or isnan(res[1]):
+            return 0
+        return res
+
+
+    def getNorm(self, graph):
+        return self.numNeighbors(graph)
+
+    def calculateForce(self,other):
+        diff = np.array(self-other)
+        card = abs(diff[0]**2 + diff[1]**2)
+        repulsion = 0 if (card == 0) else diff/card
+        return repulsion - self.a*diff
+
+    def next(self,graph):
         newAngle = uniform(0,2*pi)
         self.x += self.Vin*cos(self.Vint + newAngle)
         self.y += self.Vin*sin(self.Vint + newAngle)
+        if self.numNeighbors(graph)>0:
+            added = self.addForce(self.connectionForce(graph))
+
+    def addForce(self,vector):
+        self.x += vector[0]
+        self.y += vector[1]
+
+    def numNeighbors(self,graph):
+        return nx.degree(graph,self)
 
     def dist(self,other):
         return sqrt((self.x-other.x)**2 + (self.y-other.y)**2)
 
     def bumped(self,other):
-            return self.dist(other)<=unitConnectionRadius
+            return self.dist(other) <= unitConnectionRadius
 
     def __repr__(self):
         return "(%.4f,%.4f)"%(self.x,self.y)
 
     def location(self):
         return (self.x,self.y)
+
+    def __sub__(self,other):
+        return (self.x-other.x,self.y-other.y)
 
     @staticmethod
     def createSwarm(number, *args, **kwargs):
@@ -110,7 +143,7 @@ class Swarm(list):
 
     def initframe(self):
         self.setPlotData()
-        map(lambda x: x.next(),self)
+        map(lambda x: x.next(self.G),self)
 
     def buildTree(self):
         ''' Kdtree to search for neighbors '''
@@ -156,5 +189,5 @@ class Swarm(list):
         plt.show()
 
 S = Swarm()
-S.createNew(100000)
+S.createNew(100)
 S.recordWalkers()
