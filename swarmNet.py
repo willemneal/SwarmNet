@@ -36,6 +36,7 @@ class Walker:
 
 
     def getNorm(self, graph):
+        return nx.number_of_nodes(graph)
         return self.numNeighbors(graph)
 
     def calculateForce(self,other):
@@ -50,12 +51,15 @@ class Walker:
         self.y += self.Vin*sin(self.Vint + newAngle)
         if self.numNeighbors(graph)>0:
             added = self.addForce(self.connectionForce(graph))
+        if (1-(self.y**2+self.x**2)) < 10**-3:
+            self.Vint = (self.Vint + 180) % 360
 
     def addForce(self,vector):
         self.x += vector[0]
         self.y += vector[1]
 
     def numNeighbors(self,graph):
+
         return nx.degree(graph,self)
 
     def dist(self,other):
@@ -170,12 +174,15 @@ class Swarm(list):
 
     def initRecord(self):
         self.fig = plt.figure()
+
         self.fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+
         self.ax = self.fig.add_subplot(111, aspect='equal', autoscale_on=False,
-                             xlim=(-1, 1), ylim=(-1, 1))
+                             xlim = (-15, 15), ylim=(-15, 15))
+
         self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=2)
 
-    def recordWalkers(self, save=False, frames = 1, interval = 100):
+    def recordWalkers(self, save = False, frames = 600, interval = 100):
         self.initRecord()
         ani = animation.FuncAnimation(self.fig, self.timeStep, frames,
                                       interval=100)
@@ -190,4 +197,4 @@ class Swarm(list):
 
 S = Swarm()
 S.createNew(100)
-S.recordWalkers()
+S.recordWalkers(save=True)
