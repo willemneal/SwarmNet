@@ -10,7 +10,7 @@ from sklearn.neighbors import BallTree as BT
 import numpy as np
 WALKERS = 100
 
-class Walker:
+class Walker(np):
     number=0
     def __init__(self, *args, **kwargs):
         self.num = Walker.number
@@ -23,20 +23,23 @@ class Walker:
         self.Vin = 1./100.
         self.Vint= uniform(0,2*pi)
         self.a = 1
+        self.boundaryTolerance = 10**3
+        self.markerSize = 4
+
+
 
     def connectionForce(self, graph):
         val = 0
         for node in nx.all_neighbors(graph, self):
             val += self.calculateForce(node)
         res = val / self.getNorm(graph)
-        print res
         if isnan(res[0]) or isnan(res[1]):
             return 0
         return res
 
 
     def getNorm(self, graph):
-        return nx.number_of_nodes(graph)
+        # nx.number_of_nodes(graph)
         return self.numNeighbors(graph)
 
     def calculateForce(self,other):
@@ -51,8 +54,8 @@ class Walker:
         self.y += self.Vin*sin(self.Vint + newAngle)
         if self.numNeighbors(graph)>0:
             added = self.addForce(self.connectionForce(graph))
-        if (1-(self.y**2+self.x**2)) < 10**-3:
-            self.Vint = (self.Vint + 180) % 360
+        if (1-(self.y**2+self.x**2)) < self.boundaryTolerance:
+            self.Vint = self.Vint + pi
 
     def addForce(self,vector):
         self.x += vector[0]
@@ -123,7 +126,7 @@ def NearBy():
         self.walkers = walkers
         self.dim = 2
 
-class Swarm(list):
+class Swarm(np.array):
     record = False
     def  __init__(self, *args, **kwargs):
         self.tree = None
@@ -178,11 +181,11 @@ class Swarm(list):
         self.fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
         self.ax = self.fig.add_subplot(111, aspect='equal', autoscale_on=False,
-                             xlim = (-15, 15), ylim=(-15, 15))
+                             xlim = (-60, 60), ylim=(-60, 60))
 
-        self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=2)
+        self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=4)
 
-    def recordWalkers(self, save = False, frames = 600, interval = 100):
+    def recordWalkers(self, save = False, frames = 1200, interval = 100):
         self.initRecord()
         ani = animation.FuncAnimation(self.fig, self.timeStep, frames,
                                       interval=100)
@@ -196,5 +199,5 @@ class Swarm(list):
         plt.show()
 
 S = Swarm()
-S.createNew(100)
+S.createNew(1000)
 S.recordWalkers(save=True)
