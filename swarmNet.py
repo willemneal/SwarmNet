@@ -10,22 +10,39 @@ from sklearn.neighbors import BallTree as BT
 import numpy as np
 WALKERS = 100
 
-class Walker(np):
+class Walker:
     number=0
     def __init__(self, *args, **kwargs):
         self.num = Walker.number
         Walker.number +=1
+        self.initialPosition()
+        self.initialVelocity()
+        self.a = 1000000
+        self.markerSize = 4
+
+
+    def cicrleDistribution(self):
         u = random()+random()
         self.r = u if u<=1 else 2-u
         self.t = 2*pi*random()
         self.x =  self.r*cos(self.t)
         self.y =  self.r*sin(self.t)
-        self.Vin = 1./100.
-        self.Vint= uniform(0,2*pi)
-        self.a = 1
-        self.boundaryTolerance = 10**3
-        self.markerSize = 4
 
+    def initialVelocity(self,fixed=1./100):
+        self.fixedVelocity()
+
+    def randomVelocity(self):
+        pass
+
+    def fixedVelocity (self):
+        self.Vin = 1./100.
+
+    def initalAngle(self):
+        self.Vint= uniform(0,2*pi)
+
+    def initialPosition(self):
+        self.y, self.x = (uniform(-1,1) for i in range(2))
+        self.initalAngle()
 
 
     def connectionForce(self, graph):
@@ -39,7 +56,7 @@ class Walker(np):
 
 
     def getNorm(self, graph):
-        # nx.number_of_nodes(graph)
+        return nx.number_of_nodes(graph)
         return self.numNeighbors(graph)
 
     def calculateForce(self,other):
@@ -52,17 +69,23 @@ class Walker(np):
         newAngle = uniform(0,2*pi)
         self.x += self.Vin*cos(self.Vint + newAngle)
         self.y += self.Vin*sin(self.Vint + newAngle)
-        if self.numNeighbors(graph)>0:
-            added = self.addForce(self.connectionForce(graph))
-        if (1-(self.y**2+self.x**2)) < self.boundaryTolerance:
-            self.Vint = self.Vint + pi
+        if self.numNeighbors(graph) > 0:
+            self.addForce(self.connectionForce(graph))
+        self.checkBounary()
+
+
+
+
+
+    def checkBounary(self):
+        self.x = self.x % 1
+        self.y = self.y % 1
 
     def addForce(self,vector):
         self.x += vector[0]
         self.y += vector[1]
 
     def numNeighbors(self,graph):
-
         return nx.degree(graph,self)
 
     def dist(self,other):
@@ -114,11 +137,10 @@ class BallTree():
 
     def getEdges(self, radius):
         results = []
-        with Timer() as t:
-            for i,neighbors in enumerate(self.tree.query_radius(self.walkers.getWalkersLocation(),radius)):
-                if len(neighbors) > 0:
-                    for n in neighbors:
-                        results.append((self.walkers[i],self.walkers[n]))
+        for i,neighbors in enumerate(self.tree.query_radius(self.walkers.getWalkersLocation(),radius)):
+            if len(neighbors) > 0:
+                for n in neighbors:
+                    results.append((self.walkers[i],self.walkers[n]))
         return results
 
 def NearBy():
@@ -126,7 +148,7 @@ def NearBy():
         self.walkers = walkers
         self.dim = 2
 
-class Swarm(np.array):
+class Swarm(list):
     record = False
     def  __init__(self, *args, **kwargs):
         self.tree = None
@@ -181,15 +203,15 @@ class Swarm(np.array):
         self.fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
         self.ax = self.fig.add_subplot(111, aspect='equal', autoscale_on=False,
-                             xlim = (-60, 60), ylim=(-60, 60))
+                             xlim = (0,1), ylim=(0, 1))
 
         self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=4)
 
-    def recordWalkers(self, save = False, frames = 1200, interval = 100):
+    def recordWalkers(self, save = False, frames = 10, interval = 100):
         self.initRecord()
         ani = animation.FuncAnimation(self.fig, self.timeStep, frames,
                                       interval=100)
-        if save: ani.save('walkers-%5d.mp4'%(len(self)), fps=30, extra_args=['-vcodec', 'libx264'])
+        if save: ani.save('walkers-%5d-Nnormalized.mp4'%(len(self)), fps=1, extra_args=['-vcodec', 'libx264'])
         plt.show()
 
     def plotGraphConnections(self):
@@ -199,5 +221,6 @@ class Swarm(np.array):
         plt.show()
 
 S = Swarm()
-S.createNew(1000)
+S.createNew(100)
 S.recordWalkers(save=True)
+S.plotGraphConnections()
