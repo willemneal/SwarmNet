@@ -17,7 +17,7 @@ class Walker:
         Walker.number +=1
         self.initialPosition()
         self.initialVelocity()
-        self.a = 1000000
+        self.a = 1000000git 
         self.markerSize = 4
 
 
