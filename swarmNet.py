@@ -1,4 +1,4 @@
-from random import random, uniform
+from random import random, uniform, paretovariate
 from math import pi, cos, sin, sqrt, isnan
 import networkx as nx
 from collections  import Counter
@@ -133,14 +133,18 @@ class KDTree(sp.kdtree.KDTree):
 class BallTree():
     def __init__(self,walkers):
         self.walkers = walkers
-        self.tree = BT(walkers.getWalkersLocation())
+        self.tree = BT(walkers)
 
     def getEdges(self, radius):
-        results = []
-        for i,neighbors in enumerate(self.tree.query_radius(self.walkers.getWalkersLocation(),radius)):
-            if len(neighbors) > 0:
-                for n in neighbors:
-                    results.append((self.walkers[i],self.walkers[n]))
+        results = np.array([])
+        for i,neighbors in enumerate(self.tree.query_radius(self.walkers,radius)):
+            points = np.array([np.array([self.walkers[i],self.walkers[n]]) for n in neighbors if i != n])
+            if len(points) != 0:
+                np.append(results,points)
+                print points,neighbors,i,len(points)
+            else:
+                np.append(results,np.array([0,0]))
+
         return results
 
 def NearBy():
@@ -154,29 +158,71 @@ class Swarm(list):
         self.tree = None
         self.dt = 1
         self.G = nx.Graph()
+        self.a = 2
+
+
 
 
     def createNew(self, numNodes):
+        self.walkers = np.array(np.random.uniform(size=(numNodes,2)))
+        self.buildTree()
+        self.len = np.size(self.walkers,0)
+        '''
         self.extend(Walker.createSwarm(numNodes))
         self.G.add_nodes_from(self)
-        self.unitConnectionRadius = sqrt(1./numNodes)
+        '''
+        self.unitConnectionRadius = 1./sqrt(numNodes)
+
+
+
+    def getVelocity(self):
+        '''return random sample from pareto distrobution'''
+
+        return np.sqrt(np.random.pareto(1000,(self.len,1)))
 
 
     def getSwarm(self):
         ''' list of walkers'''
-        return self
+        return self.walkers
 
     def timeStep(self,steps=1):
         self.initframe()
-        self.updateGraph()
+        ##self.updateGraph()
 
     def initframe(self):
         self.setPlotData()
-        map(lambda x: x.next(self.G),self)
+        self.randomWalk()
+        self.connectionForce()
+        self.boundaryCondition()
+
+    @staticmethod
+    def _map(args,kwargs):
+        return np.array(map(args,kwargs))
+
+    def boundaryCondition(self):
+        self.walkers = Swarm._map(lambda elm: np.mod(elm,np.ones(2)),self.walkers)
+
+    def connectionForce(self):
+        connections = self.tree.getEdges(self.unitConnectionRadius)
+        if len(connections) != 0:
+            self.walkers += Swarm._map(lambda connection: Swarm.sumForces(connection), connections)
+
+    @staticmethod
+    def sumForces(points):
+        return np.sum(_map(lambda point: Swarm.singleForce(point), points),0)/self.len
+
+    @staticmethod
+    def singleForce(points):
+        if len(points) == 0:
+            return np.array([0,0])
+        xj, xi = np.array(points[0]),np.array(points[1])
+        diff = xj-xi
+        return diff/np.linalg.norm(diff)**2 - self.a*diff
+
 
     def buildTree(self):
         ''' Kdtree to search for neighbors '''
-        self.tree = BallTree(self)
+        self.tree = BallTree(self.walkers)
 
     def updateGraph(self):
         self.buildTree()
@@ -185,6 +231,20 @@ class Swarm(list):
     def getWalkersLocation(self):
         return [walker.location() for walker in self]
 
+    def getRandomAngles(self):
+        return np.random.uniform(low=0,high=2*pi,size=(self.len,1))
+
+
+
+    def randomWalk(self):
+        angle = self.getRandomAngles()
+        direction = np.c_[np.cos(angle),np.sin(angle)]
+        v = self.getVelocity()
+        print v
+
+        self.walkers += direction * v
+
+
     def record(self):
         self.recordWalkers()
 
@@ -192,10 +252,12 @@ class Swarm(list):
         self.walkersPlot.set_data(self.getWalkersX(),self.getWalkersY())
 
     def getWalkersX(self):
-        return [walker.x for walker in self]
+        #print self.walkers
+        #print self.walkers[:,0]
+        return self.walkers[:,0]
 
     def getWalkersY(self):
-        return [walker.y for walker in self]
+        return self.walkers[:,1]
 
     def initRecord(self):
         self.fig = plt.figure()
@@ -207,11 +269,11 @@ class Swarm(list):
 
         self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=4)
 
-    def recordWalkers(self, save = False, frames = 10, interval = 100):
+    def recordWalkers(self, save = False, frames = 1, interval = 100):
         self.initRecord()
         ani = animation.FuncAnimation(self.fig, self.timeStep, frames,
                                       interval=100)
-        if save: ani.save('walkers-%5d-Nnormalized.mp4'%(len(self)), fps=1, extra_args=['-vcodec', 'libx264'])
+        if save: ani.save('walkers-%5d-V2.mp4'%(len(self)), fps=1, extra_args=['-vcodec', 'libx264'])
         plt.show()
 
     def plotGraphConnections(self):
@@ -222,5 +284,5 @@ class Swarm(list):
 
 S = Swarm()
 S.createNew(100)
-S.recordWalkers(save=True)
-S.plotGraphConnections()
+S.recordWalkers()
+#S.plotGraphConnections()
