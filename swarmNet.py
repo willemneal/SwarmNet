@@ -135,7 +135,11 @@ class BallTree():
         self.walkers = walkers
         self.tree = BT(walkers)
 
-    def getEdges(self, radius):
+    def getEdges(self,radius):
+        return np.array([[self.walkers[i],self.walkers[j]] for i,j in enumerate(self.tree.query_radius(self.walkers,radius))])
+
+
+    def getConnections(self, tree):
         results = np.array([])
         for i,neighbors in enumerate(self.tree.query_radius(self.walkers,radius)):
             points = np.array([np.array([self.walkers[i],self.walkers[n]]) for n in neighbors if i != n])
@@ -167,11 +171,11 @@ class Swarm(list):
         self.walkers = np.array(np.random.uniform(size=(numNodes,2)))
         self.buildTree()
         self.len = np.size(self.walkers,0)
-        '''
-        self.extend(Walker.createSwarm(numNodes))
-        self.G.add_nodes_from(self)
-        '''
-        self.unitConnectionRadius = 1./sqrt(numNodes)
+
+        #self.extend(Walker.createSwarm(numNodes))
+        self.G.add_nodes_from(range(numNodes))
+
+        self.unitConnectionRadius = 4./sqrt(numNodes)
 
 
 
@@ -187,13 +191,14 @@ class Swarm(list):
 
     def timeStep(self,steps=1):
         self.initframe()
-        ##self.updateGraph()
+        self.updateGraph()
 
     def initframe(self):
         self.setPlotData()
         self.randomWalk()
         self.connectionForce()
         self.boundaryCondition()
+        #self.buildTree()
 
     @staticmethod
     def _map(args,kwargs):
@@ -202,18 +207,29 @@ class Swarm(list):
     def boundaryCondition(self):
         self.walkers = Swarm._map(lambda elm: np.mod(elm,np.ones(2)),self.walkers)
 
-    def connectionForce(self):
-        connections = self.tree.getEdges(self.unitConnectionRadius)
-        if len(connections) != 0:
-            self.walkers += Swarm._map(lambda connection: Swarm.sumForces(connection), connections)
+    def getConnections(self):
+        return np.array([[[walker[0],walker[1]] for walker in nx.all_neighbors(self.G, i)] for i in range(self.len)])
 
-    @staticmethod
-    def sumForces(points):
-        return np.sum(_map(lambda point: Swarm.singleForce(point), points),0)/self.len
+
+
+    def connectionForce(self):
+        connections = self.getConnections()# self.tree.getEdges(self.unitConnectionRadius)
+        if len(connections) != 0:
+            x = Swarm._map(lambda connection: self.sumForces(connection), connections)
+            print type(x), np.shape(x),x
+            self.walkers += x
+
+    def sumForces(self, points):
+        if len(points)==0:
+            return np.array([0,0])
+        print np.sum(np.array([Swarm.singleForce(point) for point in points]))
+        return np.sum(map(lambda point: Swarm.singleForce(point), points),0)/self.len
 
     @staticmethod
     def singleForce(points):
+        print points, "hey"
         if len(points) == 0:
+            print "hey"
             return np.array([0,0])
         xj, xi = np.array(points[0]),np.array(points[1])
         diff = xj-xi
@@ -240,7 +256,7 @@ class Swarm(list):
         angle = self.getRandomAngles()
         direction = np.c_[np.cos(angle),np.sin(angle)]
         v = self.getVelocity()
-        print v
+        #print v
 
         self.walkers += direction * v
 
