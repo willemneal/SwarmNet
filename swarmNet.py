@@ -8,6 +8,7 @@ from scipy import spatial as sp
 from timer import Timer
 from sklearn.neighbors import BallTree as BT
 import numpy as np
+from multiprocessing import Pool
 WALKERS = 100
 
 class Walker:
@@ -131,21 +132,26 @@ class KDTree(sp.kdtree.KDTree):
         return results
 
 class BallTree():
-    def __init__(self,walkers):
+    def __init__(self,walkers,radius):
         self.walkers = walkers
-        self.tree = BT(walkers)
+        self.tree    = BT(walkers)
+        self.radius  = radius
 
-    def getEdges(self,radius):
-        return np.array([[self.walkers[i],self.walkers[j]] for i,j in enumerate(self.tree.query_radius(self.walkers,radius))])
+    def getEdges(self):
+        x = np.array([[(i,p) for p in points] for i, points in enumerate(self.tree.query_radius(self.walkers,self.radius))])
+        lst = []
+        for point in x:
+            lst.extend(point)
+        return np.array(lst)
 
 
-    def getConnections(self, tree):
+    def getConnections(self):
         results = np.array([])
-        for i,neighbors in enumerate(self.tree.query_radius(self.walkers,radius)):
+        for i,neighbors in enumerate(self.tree.query_radius(self.walkers,self.radius)):
             points = np.array([np.array([self.walkers[i],self.walkers[n]]) for n in neighbors if i != n])
             if len(points) != 0:
                 np.append(results,points)
-                print points,neighbors,i,len(points)
+                #print points,neighbors,i,len(points)
             else:
                 np.append(results,np.array([0,0]))
 
@@ -158,16 +164,20 @@ def NearBy():
 
 class Swarm(list):
     record = False
+    a = 2
     def  __init__(self, *args, **kwargs):
         self.tree = None
         self.dt = 1
         self.G = nx.Graph()
-        self.a = 2
+        #self.a = 2
+        self.alpha = 10000
+        self.p = Pool(10)
 
 
 
 
     def createNew(self, numNodes):
+        self.unitConnectionRadius = 8./sqrt(numNodes)
         self.walkers = np.array(np.random.uniform(size=(numNodes,2)))
         self.buildTree()
         self.len = np.size(self.walkers,0)
@@ -175,14 +185,14 @@ class Swarm(list):
         #self.extend(Walker.createSwarm(numNodes))
         self.G.add_nodes_from(range(numNodes))
 
-        self.unitConnectionRadius = 4./sqrt(numNodes)
+
 
 
 
     def getVelocity(self):
         '''return random sample from pareto distrobution'''
 
-        return np.sqrt(np.random.pareto(1000,(self.len,1)))
+        return np.sqrt(np.random.pareto(self.alpha,(self.len,1)))
 
 
     def getSwarm(self):
@@ -191,14 +201,14 @@ class Swarm(list):
 
     def timeStep(self,steps=1):
         self.initframe()
-        self.updateGraph()
+        #self.updateGraph()
 
     def initframe(self):
         self.setPlotData()
-        self.randomWalk()
         self.connectionForce()
+        self.randomWalk()
         self.boundaryCondition()
-        #self.buildTree()
+        self.buildTree()
 
     @staticmethod
     def _map(args,kwargs):
@@ -208,41 +218,41 @@ class Swarm(list):
         self.walkers = Swarm._map(lambda elm: np.mod(elm,np.ones(2)),self.walkers)
 
     def getConnections(self):
-        return np.array([[[walker[0],walker[1]] for walker in nx.all_neighbors(self.G, i)] for i in range(self.len)])
+        return self.tree.getConnections()
+        return np.array([[(self.walkers[i],self.walkers[j]) for j in nx.all_neighbors(self.G, i)] for i in range(self.len)])
 
 
 
     def connectionForce(self):
         connections = self.getConnections()# self.tree.getEdges(self.unitConnectionRadius)
         if len(connections) != 0:
-            x = Swarm._map(lambda connection: self.sumForces(connection), connections)
-            print type(x), np.shape(x),x
+            x = np.array(p.map(self.sumForces, connections))
+            #print type(x), np.shape(x),x
             self.walkers += x
 
     def sumForces(self, points):
         if len(points)==0:
             return np.array([0,0])
-        print np.sum(np.array([Swarm.singleForce(point) for point in points]))
+        #print np.sum(np.array([Swarm.singleForce(point) for point in points]))
         return np.sum(map(lambda point: Swarm.singleForce(point), points),0)/self.len
 
     @staticmethod
     def singleForce(points):
-        print points, "hey"
-        if len(points) == 0:
-            print "hey"
+        if len(points) == 0 or (points[0][0] == points[1][0] and points[0][1] == points [1][1]):
+            #print "hey"
             return np.array([0,0])
         xj, xi = np.array(points[0]),np.array(points[1])
         diff = xj-xi
-        return diff/np.linalg.norm(diff)**2 - self.a*diff
+        return diff/np.linalg.norm(diff)**2 - Swarm.a*diff
 
 
     def buildTree(self):
         ''' Kdtree to search for neighbors '''
-        self.tree = BallTree(self.walkers)
+        self.tree = BallTree(self.walkers,self.unitConnectionRadius)
 
     def updateGraph(self):
         self.buildTree()
-        self.G.add_edges_from(self.tree.getEdges(self.unitConnectionRadius))
+        self.G.add_edges_from(self.tree.getEdges())
 
     def getWalkersLocation(self):
         return [walker.location() for walker in self]
@@ -285,11 +295,11 @@ class Swarm(list):
 
         self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=4)
 
-    def recordWalkers(self, save = False, frames = 1, interval = 100):
+    def recordWalkers(self, save = False, frames = 100, interval = 100):
         self.initRecord()
         ani = animation.FuncAnimation(self.fig, self.timeStep, frames,
                                       interval=100)
-        if save: ani.save('walkers-%5d-V2.mp4'%(len(self)), fps=1, extra_args=['-vcodec', 'libx264'])
+        if save: ani.save('walkers-%d-V2.mp4'%(self.len), fps=1, extra_args=['-vcodec', 'libx264'])
         plt.show()
 
     def plotGraphConnections(self):
@@ -298,7 +308,9 @@ class Swarm(list):
         plt.bar(counts.keys(),counts.values())
         plt.show()
 
-S = Swarm()
-S.createNew(100)
-S.recordWalkers()
-#S.plotGraphConnections()
+
+if __name__ == "__main__":
+    S = Swarm()
+    S.createNew(1000)
+    S.recordWalkers()
+    #S.plotGraphConnections()
