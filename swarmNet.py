@@ -146,16 +146,16 @@ class BallTree():
 
 
     def getConnections(self):
-        results = np.array([])
-        for i,neighbors in enumerate(self.tree.query_radius(self.walkers,self.radius)):
-            points = np.array([np.array([self.walkers[i],self.walkers[n]]) for n in neighbors if i != n])
-            if len(points) != 0:
-                np.append(results,points)
-                #print points,neighbors,i,len(points)
-            else:
-                np.append(results,np.array([0,0]))
+        results = range(np.size(self.walkers,0))
 
-        return results
+        # print self.tree.query_radius(self.walkers,self.radius)
+        for i,neighbors in enumerate(self.tree.query_radius(self.walkers,self.radius)):
+            #print neighbors
+            results[i] = np.array([np.array([self.walkers[i],self.walkers[n]]) for n in neighbors if i != n])
+            #print points
+        #print results
+
+        return np.array(results)
 
 def NearBy():
     def __init__(self,walkers):
@@ -164,7 +164,7 @@ def NearBy():
 
 class Swarm(list):
     record = False
-    a = 2
+    a = 50
     def  __init__(self, *args, **kwargs):
         self.tree = None
         self.dt = 1
@@ -177,7 +177,7 @@ class Swarm(list):
 
 
     def createNew(self, numNodes):
-        self.unitConnectionRadius = 8./sqrt(numNodes)
+        self.unitConnectionRadius = 1./numNodes
         self.walkers = np.array(np.random.uniform(size=(numNodes,2)))
         self.buildTree()
         self.len = np.size(self.walkers,0)
@@ -224,26 +224,45 @@ class Swarm(list):
 
 
     def connectionForce(self):
+
         connections = self.getConnections()# self.tree.getEdges(self.unitConnectionRadius)
+
         if len(connections) != 0:
-            x = np.array(p.map(self.sumForces, connections))
-            #print type(x), np.shape(x),x
+
+            with Timer() as t:
+                x = Swarm._map(lambda x: self.sumForces(x), connections)
+                print self.walkers
+
             self.walkers += x
 
     def sumForces(self, points):
+
+
         if len(points)==0:
             return np.array([0,0])
+    #    print np.size(points,0)
         #print np.sum(np.array([Swarm.singleForce(point) for point in points]))
-        return np.sum(map(lambda point: Swarm.singleForce(point), points),0)/self.len
+        t = [Swarm.singleForce(point) for point in points]
+        x = np.sum(np.array(t),0)
+        #print x, len(points)
+        x = x/self.len
+        if np.shape(x) != (2,):
+            print "pppp    ", points
+            print t, Swarm.singleForce(points[0][0])
+            print ""
+        return x
 
     @staticmethod
     def singleForce(points):
-        if len(points) == 0 or (points[0][0] == points[1][0] and points[0][1] == points [1][1]):
-            #print "hey"
-            return np.array([0,0])
+    #    print np.size(points), type(points)
         xj, xi = np.array(points[0]),np.array(points[1])
         diff = xj-xi
-        return diff/np.linalg.norm(diff)**2 - Swarm.a*diff
+        #print diff/np.linalg.norm(diff)**2
+        if (diff == np.array([0,0])).all():
+            return np.array([0,0])
+        x =  diff/np.linalg.norm(diff)**2 - Swarm.a*diff
+        #print x
+        return x
 
 
     def buildTree(self):
@@ -251,7 +270,6 @@ class Swarm(list):
         self.tree = BallTree(self.walkers,self.unitConnectionRadius)
 
     def updateGraph(self):
-        self.buildTree()
         self.G.add_edges_from(self.tree.getEdges())
 
     def getWalkersLocation(self):
@@ -265,10 +283,8 @@ class Swarm(list):
     def randomWalk(self):
         angle = self.getRandomAngles()
         direction = np.c_[np.cos(angle),np.sin(angle)]
-        v = self.getVelocity()
-        #print v
 
-        self.walkers += direction * v
+        self.walkers += direction * self.getVelocity()
 
 
     def record(self):
@@ -278,8 +294,6 @@ class Swarm(list):
         self.walkersPlot.set_data(self.getWalkersX(),self.getWalkersY())
 
     def getWalkersX(self):
-        #print self.walkers
-        #print self.walkers[:,0]
         return self.walkers[:,0]
 
     def getWalkersY(self):
@@ -311,6 +325,6 @@ class Swarm(list):
 
 if __name__ == "__main__":
     S = Swarm()
-    S.createNew(1000)
+    S.createNew(100)
     S.recordWalkers()
     #S.plotGraphConnections()
