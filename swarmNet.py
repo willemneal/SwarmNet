@@ -164,25 +164,28 @@ def NearBy():
 
 class Swarm(list):
     record = False
-    a = 50
+    a = 1
+    b = .1
+    TimeStep = .01
     def  __init__(self, *args, **kwargs):
         self.tree = None
         self.dt = 1
         self.G = nx.Graph()
         #self.a = 2
-        self.alpha = 10000
+        self.alpha = 100000
         self.p = Pool(10)
 
 
 
 
+
+
     def createNew(self, numNodes):
-        self.unitConnectionRadius = 1./numNodes
+        self.unitConnectionRadius = 1./numNodes**2
         self.walkers = np.array(np.random.uniform(size=(numNodes,2)))
         self.buildTree()
         self.len = np.size(self.walkers,0)
 
-        #self.extend(Walker.createSwarm(numNodes))
         self.G.add_nodes_from(range(numNodes))
 
 
@@ -205,10 +208,15 @@ class Swarm(list):
 
     def initframe(self):
         self.setPlotData()
-        self.connectionForce()
-        self.randomWalk()
+        self.addForce()
+
         self.boundaryCondition()
         self.buildTree()
+
+    def addForce(self):
+        dx = Swarm.TimeStep*self.connectionForce() + self.randomWalk()
+        self.walkers += dx
+
 
     @staticmethod
     def _map(args,kwargs):
@@ -229,11 +237,10 @@ class Swarm(list):
 
         if len(connections) != 0:
 
-            with Timer() as t:
-                x = Swarm._map(lambda x: self.sumForces(x), connections)
-                print self.walkers
+            return Swarm._map(self.sumForces, connections)
 
-            self.walkers += x
+        return np.repeat([0,0],self.len,axis=0)
+
 
     def sumForces(self, points):
 
@@ -246,10 +253,7 @@ class Swarm(list):
         x = np.sum(np.array(t),0)
         #print x, len(points)
         x = x/self.len
-        if np.shape(x) != (2,):
-            print "pppp    ", points
-            print t, Swarm.singleForce(points[0][0])
-            print ""
+        assert np.shape(x) == (2,)
         return x
 
     @staticmethod
@@ -260,7 +264,7 @@ class Swarm(list):
         #print diff/np.linalg.norm(diff)**2
         if (diff == np.array([0,0])).all():
             return np.array([0,0])
-        x =  diff/np.linalg.norm(diff)**2 - Swarm.a*diff
+        x =  Swarm.b*diff/np.linalg.norm(diff)**2 - Swarm.a*diff
         #print x
         return x
 
@@ -284,7 +288,7 @@ class Swarm(list):
         angle = self.getRandomAngles()
         direction = np.c_[np.cos(angle),np.sin(angle)]
 
-        self.walkers += direction * self.getVelocity()
+        return direction * self.getVelocity()
 
 
     def record(self):
@@ -309,11 +313,11 @@ class Swarm(list):
 
         self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=4)
 
-    def recordWalkers(self, save = False, frames = 100, interval = 100):
+    def recordWalkers(self, save = False, frames =1200, interval = 100):
         self.initRecord()
         ani = animation.FuncAnimation(self.fig, self.timeStep, frames,
                                       interval=100)
-        if save: ani.save('walkers-%d-V2.mp4'%(self.len), fps=1, extra_args=['-vcodec', 'libx264'])
+        if save: ani.save('%d-V2.mp4' % (self.len), fps=60, extra_args=['-vcodec', 'libx264'])
         plt.show()
 
     def plotGraphConnections(self):
@@ -326,5 +330,5 @@ class Swarm(list):
 if __name__ == "__main__":
     S = Swarm()
     S.createNew(100)
-    S.recordWalkers()
+    S.recordWalkers(save=True)
     #S.plotGraphConnections()
