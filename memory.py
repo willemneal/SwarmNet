@@ -14,6 +14,8 @@ class Memory(dict):
                 del self[tuple(key)]
 
     def addExp(self, items):
+        if self.length is None:
+            return []
         self.updateVals()
         self.update({tuple(key):self.length for key in items})
         return self.toRemove

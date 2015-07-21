@@ -13,13 +13,16 @@ from memory import Memory
 WALKERS = 100
 
 class Graph(nx.Graph):
-    def __init__(self,memory=50):
+    def __init__(self,memory=None):
         super(Graph,self).__init__()
         self.M = Memory(memory)
 
     def add_edges_from(self,edges):
         super(Graph,self).add_edges_from(edges)
         self.remove_edges_from(self.M.addExp(edges))
+
+    def getConnectionNum(self):
+        return np.array([self.degree(i) for i in range(self.number_of_nodes())])
 
 class KDTree(sp.kdtree.KDTree):
     def __init__(self,walkers):
@@ -57,20 +60,50 @@ class BallTree():
             results[i] = np.array([np.array([self.walkers[i], self.walkers[n]]) for n in neighbors if i != n])
         return np.array(results)
 
-def NearBy():
-    def __init__(self,walkers):
-        self.walkers = walkers
-        self.dim = 2
+
+class AnimatedScatter(object):
+        def __init__(self, numpoints, update, initState,save=False,fps=60):
+            self.numpoints = numpoints
+            self.update = update
+            self.init = initState
+            # Setup the figure and axes...
+            self.fig, self.ax = plt.subplots(figsize=(10,10))
+            self.ax.set_title("%d walkers\nframe %d"%(self.numpoints,0))
+            # Then setup FuncAnimation.
+            self.ani = animation.FuncAnimation(self.fig, self.next, interval=100,
+                                               init_func=self.setup_plot, blit=True)
+            if save: self.ani.save('%d-WithGraphR2.mp4' % (self.numpoints), fps=fps, extra_args=['-vcodec', 'libx264'])
+
+        def setup_plot(self):
+            """Initial drawing of the scatter plot."""
+            x, y, c = self.init()
+            self.scat = self.ax.scatter(x, y, c=c, s=120, vmin=0,vmax=30,animated=True,cmap=plt.cm.get_cmap('winter'))
+            #plt.colorbar(self.scat)
+            self.ax.axis([0, 1, 0, 1])
+            # For FuncAnimation's sake, we need to return the artist we'll be using
+            # Note that it expects a sequence of artists, thus the trailing comma.
+            return self.scat,
+
+        def next(self,i):
+            points, c = self.update()
+            self.scat.set_offsets(points)
+            self.scat.set_array(c)
+            self.ax.set_title("%d walkers\nframe %d"%(self.numpoints,i))
+            return self.scat,
+
+        def show(self):
+            plt.show()
 
 class Swarm(list):
     record = False
     a = 1
-    b = .1
-    TimeStep = .1
-    def  __init__(self, *args, **kwargs):
+    b = .01
+    TimeStep = .05
+    def  __init__(self, memory=None, *args, **kwargs):
+
         self.tree = None
         self.dt = 1
-        self.G = Graph(100)#nx.Graph()
+        self.G = Graph(memory)
         self.alpha = 100000
         self.p = Pool(10)
 
@@ -83,20 +116,21 @@ class Swarm(list):
 
     def getSwarm(self):
         ''' list of walkers'''
-        return self.walkers
+        return self.getWalkersX(),self.getWalkersY(),self.G.getConnectionNum()
 
     def timeStep(self,steps=1):
         self.initframe()
         self.updateGraph()
+        return self.walkers,self.G.getConnectionNum()
 
     def initframe(self):
-        self.setPlotData()
+        #self.setPlotData()
         self.addForce()
         self.boundaryCondition()
         self.buildTree()
 
     def addForce(self):
-        dx = Swarm.TimeStep*self.connectionForce() + self.randomWalk()
+        dx = Swarm.TimeStep * self.connectionForce() + self.randomWalk()
         self.walkers += dx
 
     @staticmethod
@@ -109,7 +143,6 @@ class Swarm(list):
     def getConnections(self):
         #return self.tree.getConnections()
         return np.array([[(self.walkers[i],self.walkers[j]) for j in nx.all_neighbors(self.G, i)] for i in range(self.len)])
-
 
     def connectionForce(self):
         connections = self.getConnections()
@@ -135,11 +168,9 @@ class Swarm(list):
         x =  Swarm.b * diff/np.linalg.norm(diff)**2 - Swarm.a * diff
         return x
 
-
     def buildTree(self):
         ''' Kdtree to search for neighbors '''
         self.tree = BallTree(self.walkers, self.unitConnectionRadius)
-
 
     def updateGraph(self):
         edges = self.tree.getEdges()
@@ -160,7 +191,7 @@ class Swarm(list):
 
     def getVelocity(self):
         '''return random sample from pareto distrobution'''
-        return np.sqrt(np.random.pareto(self.alpha,(self.len,1)))
+        return np.sqrt(np.random.pareto(self.alpha, (self.len, 1)))
 
     def record(self):
         self.recordWalkers()
@@ -174,28 +205,31 @@ class Swarm(list):
     def getWalkersY(self):
         return self.walkers[:,1]
 
-    def initRecord(self):
-        self.fig = plt.figure()
-        self.fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-        self.ax = self.fig.add_subplot(111, aspect='equal', autoscale_on=False,
-                                       xlim = (0,1), ylim=(0, 1))
-        self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=4)
+    #def initRecord(self,*args,**kwargs):
+    #    self.ani = AnimatedScatter(self.len,self.timeStep,(self.walkers,self.G.getConnectionNum()),kwargs)
+        # self.fig = plt.figure()
+        # self.fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        # self.ax = self.fig.add_subplot(111, aspect='equal', autoscale_on=False,
+        #                                xlim = (0,1), ylim=(0, 1))
+        # self.walkersPlot, = self.ax.plot(self.getWalkersX(), self.getWalkersY(), 'bo',ms=4)
 
     def recordWalkers(self, save = False, frames=6000, interval = 100):
-        self.initRecord()
-        ani = animation.FuncAnimation(self.fig, self.timeStep, frames, interval=100)
-        if save: ani.save('%d-WithGraphR2.mp4' % (self.len), fps=60, extra_args=['-vcodec', 'libx264'])
-        plt.show()
+        self.ani = AnimatedScatter(self.len, self.timeStep,
+                                    self.getSwarm,save=save)
+
+        #ani = animation.FuncAnimation(self.fig, self.timeStep, frames, interval=100)
+        #if save: ani.save('%d-WithGraphR2.mp4' % (self.len), fps=60, extra_args=['-vcodec', 'libx264'])
+        self.ani.show()
 
     def plotGraphConnections(self):
-        counts = Counter(self.G.degree().values())
         plt.figure()
-        plt.bar(counts.keys(),counts.values())
+        counts = Counter(self.G.getConnectionNum())
+        plt.bar(counts.keys(), counts.values())#self.G.getConnectionNum())
         plt.show()
 
 
 if __name__ == "__main__":
     S = Swarm()
     S.createNew(100)
-    S.recordWalkers(save=True)
+    S.recordWalkers()
     S.plotGraphConnections()
