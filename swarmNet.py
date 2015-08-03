@@ -22,7 +22,11 @@ class Graph(nx.Graph):
         self.remove_edges_from(self.M.addExp(edges))
 
     def getConnectionNum(self):
-        return np.array([self.degree(i) for i in range(self.number_of_nodes())])
+        return np.array([self.degree(node) for node in range(self.number_of_nodes())])
+
+    def getEdges(self):
+        return np.array([nx.all_neighbors(self, node) for node in range(self.number_of_nodes())])
+
 
 class KDTree(sp.kdtree.KDTree):
     def __init__(self,walkers):
@@ -68,11 +72,11 @@ class AnimatedScatter(object):
             self.init = initState
             # Setup the figure and axes...
             self.fig, self.ax = plt.subplots(figsize=(10,10))
-            self.ax.set_title("%d walkers\nframe %d"%(self.numpoints,0))
+            self.ax.set_title("%d walkers"%(self.numpoints))
             # Then setup FuncAnimation.
-            self.ani = animation.FuncAnimation(self.fig, self.next, interval=100,
+            self.ani = animation.FuncAnimation(self.fig, self.next,frames=6000, interval=100,
                                                init_func=self.setup_plot, blit=True)
-            if save: self.ani.save('%d-WithGraphR2.mp4' % (self.numpoints), fps=fps, extra_args=['-vcodec', 'libx264'])
+            if save: self.ani.save('%d-Scatter2.mp4' % (self.numpoints), fps=fps, extra_args=['-vcodec', 'libx264'])
 
         def setup_plot(self):
             """Initial drawing of the scatter plot."""
@@ -88,7 +92,7 @@ class AnimatedScatter(object):
             points, c = self.update()
             self.scat.set_offsets(points)
             self.scat.set_array(c)
-            self.ax.set_title("%d walkers\nframe %d"%(self.numpoints,i))
+            self.ax.set_title("%d walkers\nframe %d | max degree %d | avg degree %d)"%(self.numpoints,i,max(c),np.mean(c)))
             return self.scat,
 
         def show(self):
@@ -97,7 +101,7 @@ class AnimatedScatter(object):
 class Swarm(list):
     record = False
     a = 1
-    b = .01
+    b = .2
     TimeStep = .05
     def  __init__(self, memory=None, *args, **kwargs):
 
@@ -108,7 +112,7 @@ class Swarm(list):
         self.p = Pool(10)
 
     def createNew(self, numNodes):
-        self.unitConnectionRadius = 1. / numNodes
+        self.unitConnectionRadius = 1. / numNodes**2
         self.walkers = np.array(np.random.uniform(size=(numNodes, 2)))
         self.buildTree()
         self.len = np.size(self.walkers, 0)
@@ -119,8 +123,9 @@ class Swarm(list):
         return self.getWalkersX(),self.getWalkersY(),self.G.getConnectionNum()
 
     def timeStep(self,steps=1):
-        self.initframe()
-        self.updateGraph()
+        for step in range(steps):
+            self.initframe()
+            self.updateGraph()
         return self.walkers,self.G.getConnectionNum()
 
     def initframe(self):
@@ -130,7 +135,7 @@ class Swarm(list):
         self.buildTree()
 
     def addForce(self):
-        dx = Swarm.TimeStep * self.connectionForce() + self.randomWalk()
+        dx = Swarm.TimeStep * (self.connectionForce() + self.randomWalk())
         self.walkers += dx
 
     @staticmethod
@@ -142,7 +147,7 @@ class Swarm(list):
 
     def getConnections(self):
         #return self.tree.getConnections()
-        return np.array([[(self.walkers[i],self.walkers[j]) for j in nx.all_neighbors(self.G, i)] for i in range(self.len)])
+        return np.array([[(self.walkers[x],self.walkers[y]) for y in nodes] for x,nodes in enumerate(self.G.getEdges())])
 
     def connectionForce(self):
         connections = self.getConnections()
