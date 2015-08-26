@@ -26,7 +26,7 @@ show(p)
 renderer = p.select(type=GlyphRenderer)
 ds = renderer[0].data_source
 # prepare output to server
-output_server("animated_Scatter")
+output_server("Animated_Scatter")
 
 # create some simple animation..
 # first get our figure example data source
@@ -48,9 +48,13 @@ while True:
     cursession().store_objects(ds)
     time.sleep(0.5)
 '''
+frame =0
 while True:
     # Update y data of the source object
-    points, weights = S.timeStep(1000)
+    points, weights = S.timeStep(1)
+    #print points[0]
+    frame += 1
+
     ds.data["x"],ds.data["y"],weights = S.getSwarm()
 
     # store the updated source on the server
